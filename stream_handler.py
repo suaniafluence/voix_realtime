@@ -79,7 +79,7 @@ class OpenAIStreamHandler:
 
     def stop_audio(self):
         if self.connected.is_set():
-            self.ws.send(json.dumps({"type": "input_audio.buffer.stop"}))
+            self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
 
     def close(self):
         if self.ws:
