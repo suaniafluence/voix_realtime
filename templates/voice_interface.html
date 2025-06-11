@@ -742,7 +742,8 @@
                 };
                 
                 source.connect(scriptProcessor);
-                scriptProcessor.connect(audioContext.destination);
+                // Ne pas envoyer le microphone vers les haut-parleurs pour éviter l'écho
+                // scriptProcessor.connect(audioContext.destination);
                 
                 addLogEntry('ScriptProcessorNode configuré', 'success');
                 
