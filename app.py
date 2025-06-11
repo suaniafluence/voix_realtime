@@ -10,6 +10,7 @@ import json
 import queue
 import threading
 import websocket
+from stream_handler import OpenAIStreamHandler
 import numpy as np
 import base64
 import wave
@@ -70,6 +71,7 @@ class VoiceSession:
     def __init__(self, session_id):
         self.session_id = session_id
         self.ws = None
+        self.stream = OpenAIStreamHandler(API_KEY, MODEL, INSTRUCTIONS, self.handle_stream_event)
         self.openai_session_id = None
         self.conversation_id = None
         self.is_connected = False
@@ -115,6 +117,18 @@ class VoiceSession:
         stats_with_duration = self.stats.copy()
         stats_with_duration['duration'] = time.time() - self.stats['start_time']
         socketio.emit('stats_update', stats_with_duration, room=self.session_id)
+
+    def handle_stream_event(self, event, data):
+        if event == 'open':
+            self.is_connected = True
+        elif event == 'close':
+            self.is_connected = False
+            self.is_ready = False
+            socketio.emit('session_disconnected', {}, room=self.session_id)
+        elif event == 'error':
+            self.add_event('error', data, 'error')
+        elif event == 'message':
+            self.on_message(None, json.dumps(data))
 
     def on_open(self, ws):
         """Callback d'ouverture WebSocket OpenAI"""
@@ -210,21 +224,16 @@ class VoiceSession:
 
     def send_audio(self, audio_data):
         """Envoie de l'audio reçu du navigateur vers OpenAI"""
-        if not self.is_ready or not self.ws:
+        if not self.is_ready:
             return False
-        
+
         try:
-            message = {
-                "type": "input_audio_buffer.append",
-                "audio": audio_data  # Déjà en base64
-            }
-            
-            self.ws.send(json.dumps(message))
-            # Décoder pour calculer la taille réelle
             audio_bytes = base64.b64decode(audio_data)
-            self.update_stats('chunks_sent', 1)
-            self.update_stats('bytes_sent', len(audio_bytes))
-            return True
+            if self.stream.send_audio(audio_bytes):
+                self.update_stats('chunks_sent', 1)
+                self.update_stats('bytes_sent', len(audio_bytes))
+                return True
+            return False
 
         except Exception as e:
             self.add_event('error', f'Erreur envoi audio: {str(e)}', 'error')
@@ -232,11 +241,11 @@ class VoiceSession:
 
     def stop_audio(self):
         """Signale la fin d'une séquence audio à OpenAI"""
-        if not self.is_ready or not self.ws:
+        if not self.is_ready:
             return False
 
         try:
-            self.ws.send(json.dumps({"type": "input_audio.buffer.stop"}))
+            self.stream.stop_audio()
             self.add_event('audio', 'Fin de parole envoyée', 'info')
             return True
 
@@ -247,27 +256,17 @@ class VoiceSession:
     def start_connection(self):
         """Démarre la connexion WebSocket avec OpenAI"""
         try:
-            url = f"wss://api.openai.com/v1/realtime?model={MODEL}"
-            headers = [
-                f"Authorization: Bearer {API_KEY}",
-                "OpenAI-Beta: realtime=v1"
-            ]
-            
-            self.ws = websocket.WebSocketApp(
-                url, header=headers,
-                on_open=self.on_open,
-                on_message=self.on_message,
-                on_error=self.on_error,
-                on_close=self.on_close
-            )
-            
-            # Lancer dans un thread séparé
-            def run_websocket():
-                self.ws.run_forever()
-            
-            threading.Thread(target=run_websocket, daemon=True).start()
-            self.add_event('websocket', 'Connexion WebSocket initiée')
-            return True
+            if self.stream.start():
+                self.ws = self.stream.ws
+                self.ws.on_open = self.on_open
+                self.ws.on_message = self.on_message
+                self.ws.on_error = self.on_error
+                self.ws.on_close = self.on_close
+                self.add_event('websocket', 'Connexion WebSocket initiée')
+                return True
+            else:
+                self.add_event('error', 'Timeout connexion WebSocket', 'error')
+                return False
             
         except Exception as e:
             self.add_event('error', f'Erreur démarrage WebSocket: {str(e)}', 'error')
@@ -278,7 +277,7 @@ class VoiceSession:
         self.stop_event.set()
         
         if self.ws:
-            self.ws.close()
+            self.stream.close()
         
         # Sauvegarder l'audio si disponible
         if self.audio_log:

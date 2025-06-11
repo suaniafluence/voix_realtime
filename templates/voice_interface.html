@@ -1259,5 +1259,11 @@
             }
         });
     </script>
+    <script type="module">
+        import { AudioCapture } from '/static/js/audio-capture.js';
+        import { TTSPlayer } from '/static/js/tts_player.js';
+        import { InterruptionController } from '/static/js/interruption_controller.js';
+        window.AudioModules = { AudioCapture, TTSPlayer, InterruptionController };
+    </script>
 </body>
 </html>
