@@ -225,9 +225,23 @@ class VoiceSession:
             self.update_stats('chunks_sent', 1)
             self.update_stats('bytes_sent', len(audio_bytes))
             return True
-            
+
         except Exception as e:
             self.add_event('error', f'Erreur envoi audio: {str(e)}', 'error')
+            return False
+
+    def stop_audio(self):
+        """Signale la fin d'une séquence audio à OpenAI"""
+        if not self.is_ready or not self.ws:
+            return False
+
+        try:
+            self.ws.send(json.dumps({"type": "input_audio.buffer.stop"}))
+            self.add_event('audio', 'Fin de parole envoyée', 'info')
+            return True
+
+        except Exception as e:
+            self.add_event('error', f'Erreur stop audio: {str(e)}', 'error')
             return False
 
     def start_connection(self):
@@ -387,6 +401,20 @@ def send_audio():
         return jsonify({'success': True})
     else:
         return jsonify({'error': 'Erreur envoi audio'}), 500
+
+@app.route('/api/end_audio', methods=['POST'])
+def end_audio():
+    """Signale la fin de la parole pour déclencher la réponse"""
+    session_id = session.get('session_id')
+
+    if session_id not in active_sessions:
+        return jsonify({'error': 'Aucune session active'}), 400
+
+    voice_session = active_sessions[session_id]
+    if voice_session.stop_audio():
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': 'Erreur stop audio'}), 500
 
 @app.route('/api/status')
 def get_status():

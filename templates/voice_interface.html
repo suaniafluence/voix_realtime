@@ -755,24 +755,39 @@
 
         function processAudioLevel(rms) {
             const hasSound = rms > AUDIO_CONFIG.silenceThreshold;
-            
+
             if (hasSound) {
                 // Son détecté
                 consecutiveSilenceFrames = 0;
-                
+
                 if (!localSpeaking) {
                     localSpeaking = true;
                     addLogEntry(`LOCAL: Parole détectée (RMS: ${rms.toFixed(4)})`, 'info');
                     updateVisualState();
                 }
+
+                // Annuler le timer de fin de parole si on recommence à parler
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                    silenceTimeout = null;
+                }
             } else {
                 // Silence détecté
                 consecutiveSilenceFrames++;
-                
+
                 if (localSpeaking && consecutiveSilenceFrames >= AUDIO_CONFIG.silenceFramesNeeded) {
                     localSpeaking = false;
                     addLogEntry(`LOCAL: Silence détecté (${consecutiveSilenceFrames} frames)`, 'info');
                     updateVisualState();
+
+                    // Déclencher un timer pour signaler la fin de la parole après 2s
+                    if (silenceTimeout) {
+                        clearTimeout(silenceTimeout);
+                    }
+                    silenceTimeout = setTimeout(() => {
+                        sendEndOfSpeech();
+                        silenceTimeout = null;
+                    }, 2000);
                 }
             }
         }
@@ -891,6 +906,17 @@
                 console.error('Erreur conversion audio:', error);
                 addLogEntry('Erreur conversion audio: ' + error.message, 'error');
             }
+        }
+
+        function sendEndOfSpeech() {
+            if (!isConnected) return;
+
+            fetch('/api/end_audio', { method: 'POST' })
+                .then(() => addLogEntry('Fin de parole envoyée', 'info'))
+                .catch(error => {
+                    console.error('Erreur fin parole:', error);
+                    addLogEntry('Erreur fin parole: ' + error.message, 'error');
+                });
         }
 
         function playReceivedAudio(base64Audio) {
@@ -1064,6 +1090,8 @@
                 
                 if (data.success) {
                     isConnected = false;
+                    // Arrêter l'audio local pour libérer le microphone
+                    stopAudio();
                     updateUI();
                     updateMainStatus('⏹️ Audio temps réel arrêté', 'info');
                     showNotification('Dialogue arrêté', 'success');
