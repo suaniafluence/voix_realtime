@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Vocal OpenAI - Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: white;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4757;
+            transition: background 0.3s;
+        }
+
+        .status-dot.connected {
+            background: #2ed573;
+            animation: pulse 2s infinite;
+        }
+
+        .logout-btn {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 3rem 2rem;
+            min-height: calc(100vh - 80px);
+            position: relative;
+        }
+
+        /* Cercle microphone principal */
+        .mic-circle {
+            width: 25vh;
+            height: 25vh;
+            min-width: 200px;
+            min-height: 200px;
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            margin-top: 2rem;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .mic-circle.stopped {
+            background: linear-gradient(135deg, #ff4757 0%, #ff3742 100%);
+            box-shadow: 0 10px 30px rgba(255, 71, 87, 0.3);
+        }
+
+        .mic-circle.active {
+            background: linear-gradient(135deg, #2ed573 0%, #17a2b8 100%);
+            box-shadow: 0 10px 30px rgba(46, 213, 115, 0.3);
+        }
+
+        .mic-circle.speaking {
+            animation: speaking-pulse 1s infinite;
+        }
+
+        .mic-circle.receiving {
+            animation: receiving-pulse 1s infinite;
+        }
+
+        .mic-circle:hover {
+            transform: scale(1.05);
+        }
+
+        .mic-icon {
+            font-size: 4rem;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Indicateur d'état sous le cercle */
+        .status-text {
+            margin-top: 2rem;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 500;
+            text-align: center;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .device-info {
+            margin-top: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        /* Contrôles discrets en bas */
+        .bottom-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.8rem;
+            text-decoration: none;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* Zone des logs */
+        .logs-overlay {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40vh;
+            background: #000;
+            border-top: 2px solid #00ff00;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logs-overlay.open {
+            transform: translateY(0);
+        }
+
+        .logs-header {
+            background: #111;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #00ff00;
+        }
+
+        .logs-title {
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .logs-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .logs-btn {
+            background: #222;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 0.3rem 0.8rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .logs-btn:hover {
+            background: #00ff00;
+            color: #000;
+        }
+
+        .close-logs {
+            background: transparent;
+            border: none;
+            color: #ff4757;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-logs:hover {
+            color: #ff6b7a;
+        }
+
+        .logs-content {
+            flex: 1;
+            padding: 1rem;
+            background: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            overflow-y: auto;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 0.3rem;
+            padding: 0.2rem 0;
+        }
+
+        .log-entry.info { color: #00ff00; }
+        .log-entry.success { color: #0f0; }
+        .log-entry.error { color: #ff4757; }
+        .log-entry.warning { color: #ffa500; }
+        .log-entry.primary { color: #17a2b8; }
+
+        /* Zone des stats */
+        .stats-overlay {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 300px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 1rem;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 999;
+        }
+
+        .stats-overlay.open {
+            transform: translateX(0);
+        }
+
+        .stats-title {
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            color: #666;
+            font-family: 'Courier New', monospace;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes speaking-pulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 0 10px 30px rgba(46, 213, 115, 0.3),
+                           0 0 0 0 rgba(46, 213, 115, 0.7);
+            }
+            50% { 
+                transform: scale(1.02); 
+                box-shadow: 0 15px 40px rgba(46, 213, 115, 0.5),
+                           0 0 0 20px rgba(46, 213, 115, 0);
+            }
+        }
+
+        @keyframes receiving-pulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 0 10px 30px rgba(23, 162, 184, 0.3),
+                           0 0 0 0 rgba(23, 162, 184, 0.7);
+            }
+            50% { 
+                transform: scale(1.02); 
+                box-shadow: 0 15px 40px rgba(23, 162, 184, 0.5),
+                           0 0 0 20px rgba(23, 162, 184, 0);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-left: 4px solid #667eea;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            z-index: 1001;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.error {
+            border-left-color: #ff4757;
+        }
+
+        .notification.success {
+            border-left-color: #2ed573;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 2rem 1rem;
+            }
+
+            .mic-circle {
+                width: 30vw;
+                height: 30vw;
+                min-width: 150px;
+                min-height: 150px;
+            }
+
+            .mic-icon {
+                font-size: 3rem;
+            }
+
+            .bottom-controls {
+                bottom: 10px;
+                right: 10px;
+            }
+
+            .stats-overlay {
+                width: 250px;
+                right: 10px;
+            }
+
+            .logs-overlay {
+                height: 50vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎤 Assistant Vocal OpenAI</h1>
+        <div style="display: flex; align-items: center; gap: 2rem;">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Déconnecté</span>
+            </div>
+            <button class="logout-btn" onclick="logout()">Déconnexion</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Cercle microphone principal -->
+        <div id="micCircle" class="mic-circle stopped" onclick="toggleDialogue()">
+            <div class="mic-icon">🎤</div>
+        </div>
+
+        <!-- Texte d'état -->
+        <div class="status-text" id="mainStatusText">
+            Cliquez pour démarrer le dialogue
+        </div>
+
+        <!-- Informations sur les devices -->
+        <div class="device-info" id="deviceInfo">
+            <p><strong>🎤 Microphone:</strong> <span id="micDevice">Détection...</span></p>
+            <p><strong>🔊 Haut-parleurs:</strong> <span id="speakerDevice">Détection...</span></p>
+        </div>
+    </div>
+
+    <!-- Contrôles discrets -->
+    <div class="bottom-controls">
+        <button class="control-btn" onclick="toggleStats()">📊 Stats</button>
+        <button class="control-btn" onclick="toggleLogs()">📋 Logs</button>
+    </div>
+
+    <!-- Overlay des statistiques -->
+    <div id="statsOverlay" class="stats-overlay">
+        <div class="stats-title">
+            STATISTIQUES
+            <button class="close-logs" onclick="toggleStats()">×</button>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value" id="statDuration">0s</div>
+                <div class="stat-label">Durée</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statMessages">0</div>
+                <div class="stat-label">Messages</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statSent">0</div>
+                <div class="stat-label">Chunks envoyés</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statReceived">0</div>
+                <div class="stat-label">Chunks reçus</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay des logs -->
+    <div id="logsOverlay" class="logs-overlay">
+        <div class="logs-header">
+            <h3 class="logs-title">JOURNAL D'ÉVÉNEMENTS</h3>
+            <div class="logs-controls">
+                <button class="logs-btn" onclick="testAudio()">TEST AUDIO</button>
+                <button class="logs-btn" onclick="clearLogs()">CLEAR</button>
+                <button class="close-logs" onclick="toggleLogs()">×</button>
+            </div>
+        </div>
+        <div class="logs-content" id="logsContent">
+            <div class="log-entry info">[--:--:--] En attente de connexion...</div>
+        </div>
+    </div>
+
+    <!-- Zone de notification -->
+    <div id="notification" class="notification hidden">
+        <div id="notificationMessage"></div>
+    </div>
+
+    <script>
+        // Variables globales
+        let socket = null;
+        let isConnected = false;
+        let logsOpen = false;
+        let statsOpen = false;
+
+        // Variables audio côté navigateur
+        let audioContext = null;
+        let mediaStream = null;
+        let audioWorkletNode = null;
+        let scriptProcessor = null;
+        let isAudioActive = false;
+        let isSpeaking = false;
+        let isReceivingAudio = false;
+        let silenceTimeout = null;
+        let lastAudioTime = 0;
+
+        // Configuration audio
+        const AUDIO_CONFIG = {
+            sampleRate: 24000,
+            bufferSize: 4096,
+            silenceThreshold: 0.01,
+            silenceDelay: 500, // 1 seconde de silence avant d'arrêter la détection
+            minAudioInterval: 50 // Minimum 100ms entre envois
+        };
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            updateUI();
+        });
+
+        // Socket.IO
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Socket connecté');
+                addLogEntry('Socket connecté', 'success');
+            });
+
+            socket.on('session_ready', function(data) {
+                console.log('Session prête:', data);
+                setupAudio(); // Démarrer l'audio côté navigateur
+                updateUI();
+                showNotification('Session prête - Audio temps réel activé', 'success');
+                updateMainStatus('🎤 Audio temps réel actif - Parlez directement !', 'success');
+                addLogEntry('Session prête - Audio temps réel activé', 'success');
+            });
+
+            socket.on('speech_status', function(data) {
+                updateSpeechStatus(data.speaking);
+                // Synchroniser l'état local avec OpenAI
+                isSpeaking = data.speaking;
+                addLogEntry(`OpenAI détection parole: ${data.speaking ? 'DEBUT' : 'FIN'}`, 'primary');
+            });
+
+            socket.on('new_event', function(event) {
+                addLogEntry(`[${event.type}] ${event.data}`, event.level);
+            });
+
+            socket.on('stats_update', function(stats) {
+                updateStats(stats);
+            });
+
+            socket.on('audio_output', function(data) {
+                playReceivedAudio(data.audio);
+                // Marquer qu'on reçoit de l'audio
+                isReceivingAudio = true;
+                setTimeout(() => {
+                    isReceivingAudio = false;
+                }, 200);
+            });
+
+            socket.on('session_disconnected', function() {
+                isConnected = false;
+                stopAudio();
+                updateUI();
+                updateMainStatus('❌ Session déconnectée', 'error');
+                showNotification('Session déconnectée', 'error');
+                addLogEntry('Session déconnectée', 'error');
+            });
+        }
+
+        // Configuration audio côté navigateur
+        async function setupAudio() {
+            try {
+                addLogEntry('Demande d\'accès au microphone...', 'info');
+                
+                // Demander l'accès au microphone
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 24000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                // Créer le contexte audio
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 24000
+                });
+
+                addLogEntry(`AudioContext créé: ${audioContext.sampleRate}Hz`, 'success');
+
+                // Afficher les devices détectés
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                updateDeviceInfo(devices);
+
+                // Démarrer le traitement audio
+                await startAudioProcessing();
+                
+                isAudioActive = true;
+                addLogEntry('Audio temps réel activé côté navigateur', 'success');
+
+            } catch (error) {
+                console.error('Erreur setup audio:', error);
+                addLogEntry('Erreur accès microphone: ' + error.message, 'error');
+                showNotification('Erreur: Accès microphone refusé', 'error');
+            }
+        }
+
+        async function startAudioProcessing() {
+            try {
+                // Créer le AudioWorklet pour traiter l'audio
+                await audioContext.audioWorklet.addModule(createAudioWorkletScript());
+                
+                // Créer le nœud de traitement
+                audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
+                
+                // Connecter le microphone au processeur
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                source.connect(audioWorkletNode);
+
+                // Écouter les données audio du worklet
+                audioWorkletNode.port.onmessage = function(event) {
+                    const { audioData, rms, timestamp } = event.data;
+                    
+                    // Gestion de la détection locale de parole
+                    handleLocalSpeechDetection(rms);
+                    
+                    // Envoyer l'audio au serveur
+                    sendAudioToServer(audioData);
+                };
+
+                addLogEntry('AudioWorklet configuré et connecté', 'success');
+
+            } catch (error) {
+                console.error('Erreur AudioWorklet:', error);
+                addLogEntry('Erreur AudioWorklet: ' + error.message, 'error');
+                
+                // Fallback vers ScriptProcessorNode (obsolète mais compatible)
+                await startAudioProcessingFallback();
+            }
+        }
+
+        async function startAudioProcessingFallback() {
+            try {
+                addLogEntry('Utilisation du fallback ScriptProcessorNode', 'warning');
+                
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                scriptProcessor = audioContext.createScriptProcessor(AUDIO_CONFIG.bufferSize, 1, 1);
+                
+                scriptProcessor.onaudioprocess = function(event) {
+                    if (!isConnected || !isAudioActive) return;
+                    
+                    const inputBuffer = event.inputBuffer.getChannelData(0);
+                    
+                    // Calculer RMS pour détecter l'activité vocale
+                    let sum = 0;
+                    for (let i = 0; i < inputBuffer.length; i++) {
+                        sum += inputBuffer[i] * inputBuffer[i];
+                    }
+                    const rms = Math.sqrt(sum / inputBuffer.length);
+                    
+                    // Gestion de la détection locale de parole
+                    handleLocalSpeechDetection(rms);
+                    
+                    // Envoi audio seulement si niveau suffisant et pas trop fréquent
+                    const now = Date.now();
+                    if (rms > AUDIO_CONFIG.silenceThreshold && 
+                        (now - lastAudioTime) > AUDIO_CONFIG.minAudioInterval) {
+                        
+                        // Convertir Float32 → PCM16
+                        const pcm16 = new Int16Array(inputBuffer.length);
+                        for (let i = 0; i < inputBuffer.length; i++) {
+                            pcm16[i] = Math.max(-32768, Math.min(32767, inputBuffer[i] * 32767));
+                        }
+                        
+                        sendAudioToServer(pcm16);
+                        lastAudioTime = now;
+                    }
+                };
+                
+                source.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+                
+                addLogEntry('ScriptProcessorNode configuré (fallback)', 'success');
+                
+            } catch (error) {
+                console.error('Erreur fallback audio:', error);
+                addLogEntry('Erreur fallback audio: ' + error.message, 'error');
+            }
+        }
+
+        function handleLocalSpeechDetection(rms) {
+            const isSpeakingNow = rms > AUDIO_CONFIG.silenceThreshold;
+            
+            if (isSpeakingNow) {
+                // Parole détectée
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                    silenceTimeout = null;
+                }
+                
+                if (!isSpeaking) {
+                    isSpeaking = true;
+                    updateLocalSpeechStatus(true);
+                    addLogEntry('Détection locale: DEBUT parole', 'info');
+                }
+            } else {
+                // Silence détecté
+                if (isSpeaking && !silenceTimeout) {
+                    silenceTimeout = setTimeout(() => {
+                        isSpeaking = false;
+                        updateLocalSpeechStatus(false);
+                        addLogEntry('Détection locale: FIN parole (silence)', 'info');
+                        silenceTimeout = null;
+                    }, AUDIO_CONFIG.silenceDelay);
+                }
+            }
+        }
+
+        function updateLocalSpeechStatus(speaking) {
+            const micCircle = document.getElementById('micCircle');
+            if (speaking) {
+                micCircle.classList.add('speaking');
+                micCircle.classList.remove('receiving');
+            } else if (!isReceivingAudio) {
+                micCircle.classList.remove('speaking');
+            }
+        }
+
+        function createAudioWorkletScript() {
+            // Créer le script AudioWorklet inline
+            const workletScript = `
+                class AudioProcessor extends AudioWorkletProcessor {
+                    constructor() {
+                        super();
+                        this.bufferSize = 4096;
+                        this.buffer = new Float32Array(this.bufferSize);
+                        this.bufferIndex = 0;
+                        this.silenceThreshold = 0.01;
+                        this.lastSendTime = 0;
+                        this.minInterval = 100; // 100ms minimum entre envois
+                    }
+                    
+                    process(inputs, outputs, parameters) {
+                        const input = inputs[0];
+                        if (input.length > 0) {
+                            const inputData = input[0];
+                            
+                            for (let i = 0; i < inputData.length; i++) {
+                                this.buffer[this.bufferIndex] = inputData[i];
+                                this.bufferIndex++;
+                                
+                                if (this.bufferIndex >= this.bufferSize) {
+                                    // Calculer RMS
+                                    let sum = 0;
+                                    for (let j = 0; j < this.bufferSize; j++) {
+                                        sum += this.buffer[j] * this.buffer[j];
+                                    }
+                                    const rms = Math.sqrt(sum / this.bufferSize);
+                                    
+                                    // Contrôle de fréquence d'envoi
+                                    const now = currentTime;
+                                    const timeSinceLastSend = (now - this.lastSendTime) * 1000;
+                                    
+                                    if (rms > this.silenceThreshold && timeSinceLastSend > this.minInterval) {
+                                        // Convertir en PCM16
+                                        const pcm16 = new Int16Array(this.bufferSize);
+                                        for (let j = 0; j < this.bufferSize; j++) {
+                                            pcm16[j] = Math.max(-32768, Math.min(32767, this.buffer[j] * 32767));
+                                        }
+                                        
+                                        // Envoyer au thread principal
+                                        this.port.postMessage({
+                                            audioData: pcm16,
+                                            rms: rms,
+                                            timestamp: now
+                                        });
+                                        
+                                        this.lastSendTime = now;
+                                    }
+                                    
+                                    this.bufferIndex = 0;
+                                }
+                            }
+                        }
+                        return true;
+                    }
+                }
+                
+                registerProcessor('audio-processor', AudioProcessor);
+            `;
+            
+            // Créer un blob et retourner l'URL
+            const blob = new Blob([workletScript], { type: 'application/javascript' });
+            return URL.createObjectURL(blob);
+        }
+
+        function sendAudioToServer(audioData) {
+            if (!isConnected) return;
+            
+            try {
+                // Convertir en base64
+                const audioBytes = new Uint8Array(audioData.buffer);
+                const audioB64 = btoa(String.fromCharCode.apply(null, audioBytes));
+                
+                // Envoyer au serveur
+                fetch('/api/send_audio', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ audio: audioB64 })
+                }).catch(error => {
+                    console.error('Erreur envoi audio:', error);
+                    addLogEntry('Erreur envoi audio: ' + error.message, 'error');
+                });
+                
+            } catch (error) {
+                console.error('Erreur conversion audio:', error);
+                addLogEntry('Erreur conversion audio: ' + error.message, 'error');
+            }
+        }
+
+        function playReceivedAudio(base64Audio) {
+            if (!audioContext) return;
+            
+            try {
+                // Décoder le base64
+                const audioData = atob(base64Audio);
+                const arrayBuffer = new ArrayBuffer(audioData.length);
+                const view = new Uint8Array(arrayBuffer);
+                
+                for (let i = 0; i < audioData.length; i++) {
+                    view[i] = audioData.charCodeAt(i);
+                }
+                
+                // Convertir PCM16 → Float32
+                const pcm16 = new Int16Array(arrayBuffer);
+                const audioBuffer = audioContext.createBuffer(1, pcm16.length, 24000);
+                const channelData = audioBuffer.getChannelData(0);
+                
+                for (let i = 0; i < pcm16.length; i++) {
+                    channelData[i] = pcm16[i] / 32768.0;
+                }
+                
+                // Jouer l'audio
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+                
+                // Animation visuelle
+                const micCircle = document.getElementById('micCircle');
+                micCircle.classList.add('receiving');
+                micCircle.classList.remove('speaking');
+                
+                setTimeout(() => {
+                    if (!isSpeaking) { // Ne pas enlever si on parle encore
+                        micCircle.classList.remove('receiving');
+                    }
+                }, 800);
+                
+            } catch (error) {
+                console.error('Erreur lecture audio:', error);
+                addLogEntry('Erreur lecture audio: ' + error.message, 'error');
+            }
+        }
+
+        function stopAudio() {
+            try {
+                // Nettoyer les timeouts
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                    silenceTimeout = null;
+                }
+                
+                // Arrêter les streams
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+                
+                // Déconnecter les nœuds audio
+                if (audioWorkletNode) {
+                    audioWorkletNode.disconnect();
+                    audioWorkletNode = null;
+                }
+                
+                if (scriptProcessor) {
+                    scriptProcessor.disconnect();
+                    scriptProcessor = null;
+                }
+                
+                // Fermer le contexte audio
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
+                    audioContext = null;
+                }
+                
+                // Réinitialiser les états
+                isAudioActive = false;
+                isSpeaking = false;
+                isReceivingAudio = false;
+                lastAudioTime = 0;
+                
+                addLogEntry('Audio arrêté côté navigateur', 'info');
+                
+            } catch (error) {
+                console.error('Erreur arrêt audio:', error);
+                addLogEntry('Erreur arrêt audio: ' + error.message, 'error');
+            }
+        }
+
+        function updateDeviceInfo(devices) {
+            const micDevice = document.getElementById('micDevice');
+            const speakerDevice = document.getElementById('speakerDevice');
+            
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+            
+            if (audioInputs.length > 0) {
+                const defaultInput = audioInputs.find(d => d.deviceId === 'default') || audioInputs[0];
+                micDevice.textContent = defaultInput.label || 'Microphone par défaut';
+                micDevice.style.color = '#2ed573';
+            } else {
+                micDevice.textContent = 'Aucun microphone détecté';
+                micDevice.style.color = '#ff4757';
+            }
+            
+            if (audioOutputs.length > 0) {
+                const defaultOutput = audioOutputs.find(d => d.deviceId === 'default') || audioOutputs[0];
+                speakerDevice.textContent = defaultOutput.label || 'Haut-parleurs par défaut';
+                speakerDevice.style.color = '#2ed573';
+            } else {
+                speakerDevice.textContent = 'Aucun haut-parleur détecté';
+                speakerDevice.style.color = '#ff4757';
+            }
+            
+            addLogEntry(`Devices détectés: ${audioInputs.length} inputs, ${audioOutputs.length} outputs`, 'info');
+        }
+
+        // Gestion du dialogue principal
+        async function toggleDialogue() {
+            if (isConnected) {
+                await stopDialogue();
+            } else {
+                await startDialogue();
+            }
+        }
+
+        async function startDialogue() {
+            try {
+                addLogEntry('Démarrage du dialogue...', 'info');
+                const response = await fetch('/api/start_dialogue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    isConnected = true;
+                    updateUI();
+                    updateMainStatus('🔗 Connexion en cours...', 'info');
+                    showNotification('Dialogue démarré - Audio temps réel en cours d\'activation', 'success');
+                    addLogEntry('Dialogue démarré avec succès', 'success');
+                } else {
+                    showNotification('Erreur: ' + data.error, 'error');
+                    updateMainStatus('❌ Erreur de connexion', 'error');
+                    addLogEntry('Erreur démarrage: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur démarrage:', error);
+                showNotification('Erreur de connexion', 'error');
+                updateMainStatus('❌ Erreur de connexion', 'error');
+                addLogEntry('Erreur de connexion: ' + error, 'error');
+            }
+        }
+
+        async function stopDialogue() {
+            try {
+                addLogEntry('Arrêt du dialogue...', 'info');
+                const response = await fetch('/api/stop_dialogue', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    isConnected = false;
+                    updateUI();
+                    updateMainStatus('⏹️ Audio temps réel arrêté', 'info');
+                    showNotification('Dialogue arrêté', 'success');
+                    addLogEntry('Dialogue arrêté avec succès', 'success');
+                } else {
+                    showNotification('Erreur: ' + data.error, 'error');
+                    addLogEntry('Erreur arrêt: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur arrêt:', error);
+                showNotification('Erreur lors de l\'arrêt', 'error');
+                addLogEntry('Erreur arrêt: ' + error, 'error');
+            }
+        }
+
+        // Test audio
+        async function testAudio() {
+            try {
+                addLogEntry('Test audio...', 'info');
+                const response = await fetch('/api/generate_test_audio');
+                const data = await response.json();
+                
+                if (data.success && data.audio) {
+                    // Jouer le signal de test reçu du serveur
+                    playReceivedAudio(data.audio);
+                    showNotification(data.message, 'success');
+                    addLogEntry('Signal de test joué: ' + data.message, 'success');
+                } else {
+                    showNotification('Erreur génération test: ' + data.error, 'error');
+                    addLogEntry('Erreur test audio: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur test audio:', error);
+                showNotification('Erreur test audio', 'error');
+                addLogEntry('Erreur test audio: ' + error, 'error');
+            }
+        }
+
+        // Mise à jour de l'interface
+        function updateUI() {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const micCircle = document.getElementById('micCircle');
+
+            if (isConnected) {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Connecté';
+                micCircle.classList.remove('stopped');
+                micCircle.classList.add('active');
+            } else {
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Déconnecté';
+                micCircle.classList.remove('active', 'speaking', 'receiving');
+                micCircle.classList.add('stopped');
+                updateMainStatus('Cliquez pour démarrer le dialogue', 'info');
+            }
+        }
+
+        function updateMainStatus(message, type) {
+            const mainStatusText = document.getElementById('mainStatusText');
+            mainStatusText.textContent = message;
+        }
+
+        function updateSpeechStatus(speaking) {
+            const micCircle = document.getElementById('micCircle');
+            
+            if (speaking) {
+                // OpenAI détecte la parole
+                micCircle.classList.add('speaking');
+                micCircle.classList.remove('receiving');
+                updateMainStatus('🎤 Vous parlez - L\'IA écoute...', 'success');
+            } else {
+                // OpenAI ne détecte plus la parole
+                micCircle.classList.remove('speaking');
+                if (!isReceivingAudio) {
+                    updateMainStatus('🔄 Audio temps réel actif - Parlez directement !', 'success');
+                }
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('statDuration').textContent = `${Math.floor(stats.duration)}s`;
+            document.getElementById('statMessages').textContent = stats.messages_count || 0;
+            document.getElementById('statSent').textContent = stats.chunks_sent || 0;
+            document.getElementById('statReceived').textContent = stats.chunks_received || 0;
+        }
+
+        // Gestion des logs
+        function toggleLogs() {
+            const logsOverlay = document.getElementById('logsOverlay');
+            logsOpen = !logsOpen;
+            if (logsOpen) {
+                logsOverlay.classList.add('open');
+            } else {
+                logsOverlay.classList.remove('open');
+            }
+        }
+
+        function toggleStats() {
+            const statsOverlay = document.getElementById('statsOverlay');
+            statsOpen = !statsOpen;
+            if (statsOpen) {
+                statsOverlay.classList.add('open');
+            } else {
+                statsOverlay.classList.remove('open');
+            }
+        }
+
+        function addLogEntry(message, level = 'info') {
+            const logsContent = document.getElementById('logsContent');
+            const time = new Date().toLocaleTimeString();
+            const logDiv = document.createElement('div');
+            logDiv.className = `log-entry ${level}`;
+            logDiv.textContent = `[${time}] ${message}`;
+            
+            logsContent.appendChild(logDiv);
+            logsContent.scrollTop = logsContent.scrollHeight;
+
+            // Garder seulement les 100 dernières entrées
+            while (logsContent.children.length > 100) {
+                logsContent.removeChild(logsContent.firstChild);
+            }
+
+            // Animation pour l'audio reçu
+            if (message.includes('Audio de réponse') || message.includes('Delta audio reçu')) {
+                const micCircle = document.getElementById('micCircle');
+                micCircle.classList.add('receiving');
+                setTimeout(() => {
+                    micCircle.classList.remove('receiving');
+                }, 1000);
+            }
+        }
+
+        function clearLogs() {
+            const logsContent = document.getElementById('logsContent');
+            logsContent.innerHTML = '<div class="log-entry info">[' + new Date().toLocaleTimeString() + '] Logs effacés</div>';
+        }
+
+        // Notifications
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const messageEl = document.getElementById('notificationMessage');
+            
+            messageEl.textContent = message;
+            notification.className = `notification ${type} show`;
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+
+        // Déconnexion
+        function logout() {
+            if (isConnected) {
+                stopDialogue();
+            }
+            window.location.href = '/logout';
+        }
+
+        // Nettoyage
+        window.addEventListener('beforeunload', function() {
+            if (isConnected) {
+                stopDialogue();
+            }
+        });
+    </script>
+</body>
+</html>

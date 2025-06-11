@@ -1,0 +1,19 @@
+# Environnement virtuel
+venv/
+
+# Fichiers de log
+logs/*
+!logs/.gitkeep  # (optionnel : pour garder le dossier vide dans Git)
+
+# Enregistrements audio/vidéo, etc.
+static/recordings/*
+
+# Fichier d’environnement
+.env
+
+# Fichiers Python compilés
+*.pyc
+__pycache__/
+
+# Fichiers logs génériques
+*.log
