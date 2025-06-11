@@ -16,7 +16,7 @@ import base64
 import wave
 import time
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import logging
 from dotenv import load_dotenv
@@ -300,6 +300,13 @@ class VoiceSession:
                 self.add_event('error', f'Erreur sauvegarde audio: {str(e)}', 'error')
 
 # Routes Flask
+
+@app.route('/favicon.ico')
+def favicon():
+    """Fichier d'icône pour l'application"""
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.png', mimetype='image/png')
+
 @app.route('/')
 def login():
     """Page de connexion"""

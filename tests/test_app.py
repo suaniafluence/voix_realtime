@@ -32,6 +32,23 @@ def test_login_page(client):
     assert resp.status_code == 200
 
 
+def test_favicon(client):
+    path = os.path.join('static', 'favicon.png')
+    created = False
+    if not os.path.exists(path):
+        os.makedirs('static', exist_ok=True)
+        with open(path, 'wb') as f:
+            f.write(b'\x89PNG\r\n\x1a\n')
+        created = True
+
+    try:
+        resp = client.get('/favicon.ico')
+        assert resp.status_code == 200
+    finally:
+        if created:
+            os.remove(path)
+
+
 def test_login_success(client):
     resp = client.post('/login', data={'username': 'tester', 'password': ''})
     assert resp.status_code == 302

@@ -37,7 +37,10 @@ Vous pouvez également appeler l'endpoint `/api/generate_test_audio` pour géné
 - `app.py` – application Flask et communication WebSocket avec l'API OpenAI
 - `templates/` – templates HTML (page de connexion et interface vocale)
 - `requirements.txt` – dépendances Python
+- `static/favicon.png` – icône de l'application affichée dans l'onglet du navigateur
 
 ## Licence
 
 Ce projet est fourni tel quel, sans garantie. Utilisez-le à vos risques et périls.
+Le fichier `static/favicon.png` provient du projet [twemoji](https://github.com/twitter/twemoji/blob/master/assets/72x72/1f3a4.png)
+sous licence Creative Commons Attribution 4.0 (CC-BY 4.0).
