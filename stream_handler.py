@@ -79,7 +79,9 @@ class OpenAIStreamHandler:
 
     def stop_audio(self):
         if self.connected.is_set():
+            # Finalize the input audio and request a response
             self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+            self.ws.send(json.dumps({"type": "response.create"}))
 
     def close(self):
         if self.ws:
