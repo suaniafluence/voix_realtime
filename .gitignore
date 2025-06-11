@@ -17,3 +17,5 @@ __pycache__/
 
 # Fichiers logs génériques
 *.log
+.coverage
+static/favicon.png
