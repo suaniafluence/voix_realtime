@@ -551,8 +551,8 @@
         const AUDIO_CONFIG = {
             sampleRate: 24000,
             bufferSize: 4096,
-            silenceThreshold: 0.005,      // Seuil plus bas
-            silenceFramesNeeded: 30,       // 30 frames de silence avant arrêt (~300ms)
+            silenceThreshold: 0.005,      // Seuil bas pour mieux détecter le bruit de fond
+            silenceFramesNeeded: 20,       // 20 frames de silence (~200ms) avant arrêt
             minAudioInterval: 50           // 50ms minimum entre envois
         };
 
@@ -787,7 +787,7 @@
                     silenceTimeout = setTimeout(() => {
                         sendEndOfSpeech();
                         silenceTimeout = null;
-                    }, 2000);
+                    }, 1000); // délai réduit pour détecter plus vite la fin de la parole
                 }
             }
         }
