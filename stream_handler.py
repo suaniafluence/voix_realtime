@@ -83,6 +83,7 @@ class OpenAIStreamHandler:
             self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
             self.ws.send(json.dumps({"type": "response.create"}))
 
+
     def close(self):
         if self.ws:
             self.ws.close()
