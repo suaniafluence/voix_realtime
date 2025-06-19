@@ -82,7 +82,7 @@
             animation: pulse 2s infinite;
         }
 
-        .logout-btn {
+        .nav-btn {
             background: none;
             border: 1px solid rgba(255, 255, 255, 0.3);
             color: white;
@@ -92,7 +92,7 @@
             transition: all 0.3s;
         }
 
-        .logout-btn:hover {
+        .nav-btn:hover {
             background: rgba(255, 255, 255, 0.1);
         }
 
@@ -454,7 +454,8 @@
                 <div class="status-dot" id="statusDot"></div>
                 <span id="statusText">Déconnecté</span>
             </div>
-            <button class="logout-btn" onclick="logout()">Déconnexion</button>
+            <a href="{{ url_for('upload') }}" class="nav-btn">Upload</a>
+            <button class="nav-btn" onclick="logout()">Déconnexion</button>
         </div>
     </div>
 
