@@ -19,3 +19,7 @@ __pycache__/
 *.log
 .coverage
 static/favicon.png
+# Dossier d'uploads pour les tests
+static/uploads/
+# Node.js dependencies
+node_modules/
