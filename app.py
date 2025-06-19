@@ -10,6 +10,7 @@ import json
 import queue
 import threading
 import websocket
+from werkzeug.utils import secure_filename
 from stream_handler import OpenAIStreamHandler
 import numpy as np
 import base64
@@ -318,6 +319,27 @@ def voice_interface():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     return render_template('voice_interface.html')
+
+
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    """Page d'upload simple pour envoyer un fichier audio"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    message = None
+    if request.method == 'POST':
+        uploaded = request.files.get('file')
+        if uploaded and uploaded.filename:
+            os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
+            filename = secure_filename(uploaded.filename)
+            save_path = os.path.join('static', 'uploads', filename)
+            uploaded.save(save_path)
+            message = f"Fichier '{filename}' téléchargé"
+        else:
+            message = 'Aucun fichier sélectionné'
+
+    return render_template('upload.html', message=message)
 
 @app.route('/login', methods=['POST'])
 def do_login():

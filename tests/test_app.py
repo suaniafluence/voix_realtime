@@ -3,6 +3,7 @@ import sys
 import importlib
 import base64
 import json
+import io
 import pytest
 
 # Configurer les variables d'environnement requises avant l'import de l'application
@@ -131,3 +132,19 @@ def test_dialogue_flow(client, monkeypatch):
     resp = client.get('/logout')
     assert resp.status_code == 302
     assert resp.headers['Location'].endswith('/')
+
+
+def test_upload_page(client):
+    client.post('/login', data={'username': 'tester', 'password': ''})
+    resp = client.get('/upload')
+    assert resp.status_code == 200
+
+
+def test_file_upload(client):
+    client.post('/login', data={'username': 'tester', 'password': ''})
+    data = {
+        'file': (io.BytesIO(b'data'), 'sample.wav')
+    }
+    resp = client.post('/upload', data=data, content_type='multipart/form-data')
+    assert resp.status_code == 200
+    assert b'sample.wav' in resp.data
